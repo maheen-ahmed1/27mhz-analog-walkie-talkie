@@ -31,8 +31,8 @@ Team project — Ahsanullah University of Science and Technology (AUST), Dhaka
 
 | | |
 |---|---|
-| **Repo** | [github.com/maheen-ahmed1/27mhz-analog-walkie-talkie](https://github.com/maheen-ahmed1/27mhz-analog-walkie-talkie) |
-| **Authors** | Sarkar Maheen Ahmed, Azmain Muksit, Amir Hamza Talib, Nahinul Islam Prottoy, Ahmmed Fahim |
+| **Repo** | [github.com/maheen-ahmed1/analog-walkie-talkie](https://github.com/maheen-ahmed1/analog-walkie-talkie) |
+| **Authors** | Sarkar Maheen Ahmed, Azmain Muksit, Amir Hamza Talib, Nahinul Islam Prottoy,Lion Ahmmed Fahim |
 
 ---
 
