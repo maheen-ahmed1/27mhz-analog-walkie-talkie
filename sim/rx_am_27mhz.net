@@ -1,0 +1,100 @@
+* ===========================================================================
+* 27 MHz AM WALKIE-TALKIE  --  RECEIVER SECTION
+* ===========================================================================
+* Extracted from wt27_v5.kicad_sch / out/wt27_v5.net -- the Q2 island
+* (Q2, L2, R5-R9, C6-C11) plus the audio take-off into the volume pot.
+*
+* Q2 is the SAME Colpitts as the transmitter's Q1, with one difference: where
+* Q1 has the crystal from base to RF ground, Q2 has C6 (39 n) -- a plain short.
+* So Q2 free-runs, and the detector is meant to be super-regenerative.
+*
+* >>> READ RX_SIM_NOTES.md SECTION 3 BEFORE TRUSTING THIS. The simulation says
+* >>> this stage does NOT self-quench: it oscillates continuously. That makes
+* >>> it a REGENERATIVE detector, not a super-regenerative one.
+*
+* On receive SW2 feeds Q2 from the FULL 9 V rail (not the LM386 output), and
+* connects the antenna to L2's 2-turn link winding.
+*
+* RUN:   "C:\Program Files\ADI\LTspice\LTspice.exe" -b -Run rx_am_27mhz.net
+*
+* TRACES:
+*        V(msg)    the audio the far transmitter is sending
+*        V(ant)    the AM signal arriving at the antenna
+*        V(coll)   Q2 collector -- the detector's own oscillation
+*        V(aud)    recovered audio after the R9/C11 quench low-pass
+*        V(aout)   audio delivered into the volume pot
+* ===========================================================================
+
+* ---------------------------------------------------------------------------
+* USER PARAMETERS
+* ---------------------------------------------------------------------------
+.param fc   = 27.145Meg   ; incoming carrier
+.param fm   = 2k          ; message frequency on the incoming signal
+.param m    = 0.5         ; modulation index of the incoming signal
+.param Vrf  = 10m         ; antenna signal amplitude (note 1)
+.param VRX  = 9           ; RX supply -- the full battery, via SW2
+.param Lp   = 1.14u       ; L2 primary, tuned for 27.145 MHz (note 2)
+.param Ls   = {Lp*(2/9)**2}
+.param kx   = 0.85
+.param R7v  = 56          ; regeneration control as drawn
+
+* ---------------------------------------------------------------------------
+* INCOMING SIGNAL -- what the other walkie-talkie is transmitting
+* ---------------------------------------------------------------------------
+Vmsgref msg 0 SINE(0 1 {fm})
+Brf   rfsrc 0 V = {Vrf}*(1+{m}*sin(2*pi*{fm}*time))*sin(2*pi*{fc}*time)
+Rsrc  rfsrc ant 50
+* ANT1 -> SW2 pole A -> L2 pin 4
+Rlink ant secb 0.001
+
+* ---------------------------------------------------------------------------
+* Q2 REGENERATIVE / SUPER-REGENERATIVE DETECTOR
+* ---------------------------------------------------------------------------
+Vrx   rxv 0 {VRX}
+R5    rxv  base 33k
+R6    base 0    15k
+R7    emit eb   {R7v}
+R8    eb   0    390
+C9    eb   0    10n
+C7    coll emit 33p
+C8    emit eb   82p
+C6    base eb   39n         ; the TX has its crystal here; the RX has a short
+L2A   rxv  coll {Lp}
+L2B   seca secb {Ls}
+K2    L2A L2B   {kx}
+C10   seca 0    15p
+
+Q2    coll base emit 0 BC547B
+
+* ---------------------------------------------------------------------------
+* AUDIO TAKE-OFF -- R9/C11 is the quench low-pass, 1/(2*pi*10k*4n7) = 3.4 kHz
+* ---------------------------------------------------------------------------
+R9    eb   aud  10k
+C11   aud  0    4n7
+C12   aud  aout 0.47u
+RV1   aout 0    10k         ; the volume pot is the load on this stage
+
+Ikick 0 coll PULSE(0 20m 1u 1n 1n 20n 1 1)
+
+.model BC547B NPN(IS=1.8E-14 ISE=5.0E-14 ISC=1.72E-13 XTI=3 BF=400 BR=35.5
++ IKF=0.14 IKR=0.03 XTB=1.5 VAF=80 VAR=12.5 VJE=0.65 VJC=0.55 RE=0.6 RC=0.25
++ RB=0.56 CJE=13E-12 CJC=4E-12 XCJC=0.6 FC=0.5 MJE=0.55 MJC=0.12 TF=0.5E-9
++ TR=50E-9 VTF=4 ITF=0.5 PTF=25 EG=1.11 NE=1.46 NC=1.27)
+
+.options plotwinsize=0 reltol=1e-4
+.tran 0 1000u 0 2n
+.save V(msg) V(ant) V(coll) V(eb) V(aud) V(aout)
+
+* ---------------------------------------------------------------------------
+* SELF-CHECKS
+* quench_test is the important one: it compares the collector swing over a LONG
+* window against a SHORT one. A super-regen bursts, so the long window would be
+* much larger. A ratio of 1.00 means the detector never stops oscillating.
+* ---------------------------------------------------------------------------
+.meas TRAN coll_narrow PP V(coll) FROM 995u TO 1000u
+.meas TRAN coll_wide   PP V(coll) FROM 800u TO 1000u
+.meas TRAN quench_test PARAM {coll_wide/coll_narrow}
+.meas TRAN aud_pp      PP V(aud)  FROM 600u TO 1000u
+.meas TRAN aout_pp     PP V(aout) FROM 600u TO 1000u
+.meas TRAN eb_dc       AVG V(eb)  FROM 600u TO 1000u
+.end

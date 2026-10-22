@@ -1,0 +1,145 @@
+* ===========================================================================
+* 27 MHz AM WALKIE-TALKIE  --  TRANSMITTER SECTION
+* ===========================================================================
+* Extracted from wt27_v5.kicad_sch / out/wt27_v5.net -- the Q1 island only
+* (Q1, L1, Y1, CV1, R1-R4, C1-C5) plus the antenna.
+*
+* Q1 is a crystal Colpitts oscillator running COMMON BASE at RF: the base is
+* RF-grounded through the crystal, C2/C3 form the Colpitts divider from
+* collector to emitter, and L1 is the collector tank.
+*
+* AM is produced by MODULATING Q1's SUPPLY RAIL with the LM386 output.
+* There is no separate modulator stage -- the oscillator is the modulator.
+*
+* RUN:   "C:\Program Files\ADI\LTspice\LTspice.exe" -b -Run tx_am_27mhz.net
+*        or just open this .net in LTspice and press Run.
+*
+* TRACES (see TX_SIM_NOTES.md for the click-by-click):
+*        V(msg)      the message / audio
+*        V(txv)      modulated supply = the envelope that is impressed on the RF
+*        V(carrier)  clean 27.145 MHz reference carrier (display only -- note 3)
+*        V(coll)     Q1 collector: the AM signal at full amplitude
+*        V(ant)      the transmitted AM signal across the 50 ohm antenna load
+* ===========================================================================
+
+* ---------------------------------------------------------------------------
+* USER PARAMETERS
+* ---------------------------------------------------------------------------
+.param fx    = 27.145Meg   ; wanted carrier frequency
+.param fm    = 50k         ; MESSAGE frequency        (note 1)
+.param m     = 0.5         ; modulation index 0..1    (note 2)
+.param VTXDC = 4.5         ; LM386 output idles at Vs/2 = 4.5 V
+.param tmod  = 400u        ; hold off modulation until the oscillator has settled
+.param Vm    = {m*VTXDC}
+.param Ctrim = 20p         ; CV1 netting trimmer, usable 12p..30p (note 4)
+.param Lp    = 1.10u       ; L1 primary,  9 turns
+.param Ls    = {Lp*(2/9)**2} ; L1 secondary, 2 turns  (L proportional to N^2)
+.param kx    = 0.85        ; primary/secondary coupling
+.param Rant  = 50          ; antenna load
+
+* ---------------------------------------------------------------------------
+* MESSAGE SOURCE + MODULATED SUPPLY  (stands in for the LM386 on transmit)
+* On TX, SW3 pole B routes the LM386 output to L1 pin 1 / R1 -- that node is
+* the oscillator's entire supply, so audio on it becomes AM on the carrier.
+* ---------------------------------------------------------------------------
+Vmsg  msg 0 SINE(0 {Vm} {fm} {tmod})
+Btx   txv 0 V = {VTXDC} + V(msg)
+Rout  txv txvs 1              ; LM386 output impedance
+
+* ---------------------------------------------------------------------------
+* Q1 CRYSTAL COLPITTS OSCILLATOR
+* ---------------------------------------------------------------------------
+* bias
+R1    txvs base 33k
+R2    base 0     15k
+R3    emit eb    56          ; NOT bypassed -- it sits across C3 (note 5)
+R4    eb   0     390
+C4    eb   0     10n         ; RF-grounds the eb node
+
+* Colpitts divider: collector -> emitter -> RF ground
+C2    coll emit  33p
+C3    emit eb    82p
+
+* L1 tank / output transformer, 9T : 2T
+L1A   txvs coll  {Lp}
+L1B   seca secb  {Ls}
+K1    L1A L1B    {kx}
+C5    seca 0     15p
+
+* crystal branch: base -- C1 -- Y1 -- CV1 -- RF ground
+C1    base xt1   39n
+XY1   xt1  xt2   XTAL
+CV1   xt2  eb    {Ctrim}
+
+Q1    coll base emit 0 BC547B
+
+* ---------------------------------------------------------------------------
+* ANTENNA  (SW2 pole A is closed on transmit: L1 pin 4 -> ANT1)
+* A real 1 m whip at 27 MHz is ~1-2 ohm radiation resistance in series with
+* about -j1000; 50 ohm resistive is the conventional stand-in and is the
+* PESSIMISTIC case here (it loads the tank harder than the real antenna).
+* ---------------------------------------------------------------------------
+Rlink secb ant  0.001
+RA    ant  0    {Rant}
+
+* ---------------------------------------------------------------------------
+* IDEAL REFERENCE CARRIER -- PLOT ONLY, NOT PART OF THE CIRCUIT   (note 3)
+* ---------------------------------------------------------------------------
+Vcar  carrier 0 SINE(0 1 {fx})
+
+* ---------------------------------------------------------------------------
+* STARTUP KICK -- one 20 ns, 20 mA pulse into the tank at t = 1 us.
+* A crystal oscillator takes a very long time to build up out of numerical
+* noise. This just skips the wait; it does not affect the settled result.
+* Delete this line if you want to watch genuine startup (run to 5 ms).
+* ---------------------------------------------------------------------------
+Ikick 0 coll PULSE(0 20m 1u 1n 1n 20n 1 1)
+
+* ---------------------------------------------------------------------------
+* MODELS
+* ---------------------------------------------------------------------------
+* 27 MHz AT-cut crystal, motional-arm model.
+* fpull is the usual load-resonance offset: a crystal cut for series resonance
+* at fs runs slightly off that in a real oscillator, so fs is set high by the
+* amount needed to land the OSCILLATOR on fx.
+.param fpull = 13.4k
+.param fs    = {fx + fpull}
+.param Cmot  = 20f            ; motional C   (real 27 MHz parts: 5..25 fF)
+.param Rmot  = 25             ; motional R = ESR, Q ~ 11700
+.param Lmot  = {1/((2*pi*fs)**2*Cmot)}
+.subckt XTAL a b
+Lx   a  n1 {Lmot}
+Cx   n1 n2 {Cmot}
+Rx   n2 b  {Rmot}
+C0   a  b  5p                 ; holder / shunt capacitance
+Rlk  a  b  100meg             ; DC path so the node is not floating
+.ends XTAL
+
+.model BC547B NPN(IS=1.8E-14 ISE=5.0E-14 ISC=1.72E-13 XTI=3 BF=400 BR=35.5
++ IKF=0.14 IKR=0.03 XTB=1.5 VAF=80 VAR=12.5 VJE=0.65 VJC=0.55 RE=0.6 RC=0.25
++ RB=0.56 CJE=13E-12 CJC=4E-12 XCJC=0.6 FC=0.5 MJE=0.55 MJC=0.12 TF=0.5E-9
++ TR=50E-9 VTF=4 ITF=0.5 PTF=25 EG=1.11 NE=1.46 NC=1.27)
+
+* ---------------------------------------------------------------------------
+* ANALYSIS
+* t = 0..400 us is oscillator start-up; modulation begins at 400 us.
+* Zoom to 900u..1000u for a clean picture of the modulated carrier.
+* (Do NOT add a Tstart to the .tran line -- it silently breaks every .meas
+*  below. If you want a smaller .raw, shorten the run instead.)
+* ---------------------------------------------------------------------------
+.options plotwinsize=0 reltol=1e-4
+.tran 0 1100u 0 2n
+.save V(msg) V(txv) V(carrier) V(coll) V(ant) V(emit) V(base)
+
+* ---------------------------------------------------------------------------
+* SELF-CHECKS -- values appear in tx_am_27mhz.log
+* ---------------------------------------------------------------------------
+.meas TRAN ta   WHEN V(coll)=4.5 TD=1000u RISE=1
+.meas TRAN tb   WHEN V(coll)=4.5 TD=1000u RISE=101
+.meas TRAN fosc PARAM {100/(tb-ta)}
+.meas TRAN pp_msg_peak   PP V(coll) FROM 904u TO 906u
+.meas TRAN pp_msg_trough PP V(coll) FROM 914u TO 916u
+.meas TRAN mod_depth PARAM {(pp_msg_peak-pp_msg_trough)/(pp_msg_peak+pp_msg_trough)}
+.meas TRAN ant_pp    PP V(ant) FROM 900u TO 920u
+
+.end

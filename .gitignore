@@ -1,0 +1,51 @@
+# --- LTspice ---
+*.raw
+*.op.raw
+*.fft
+*.tmp
+*.db
+# Transient logs are regenerable; keep notes in *.md instead
+sim/*.log
+
+# --- KiCad ---
+*.kicad_prl
+fp-info-cache
+*-backups/
+*.lck
+~*
+\#auto_saved_files#
+*_autosave*
+*.kicad_pcb-bak
+*.kicad_sch-bak
+
+# Generic backups (exports, sims, docs)
+*.bak
+*.bak-*
+*~
+*.net.bak*
+*.plt.bak*
+
+# Duplicate / scratch netlist copies
+sim/* .txt
+sim/*\ .txt
+
+# Original Windows screenshot names (use tx_sim.png / rx_sim.png)
+sim/Screenshot*.png
+
+# --- OS / editors ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Misc local junk ---
+__pycache__/
+*.pyc
+.scratch/
+scratchpad/
+*.zip
+*.7z
+.cache/

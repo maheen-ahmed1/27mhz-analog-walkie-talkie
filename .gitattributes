@@ -1,0 +1,3 @@
+# Ignore simulation netlists and plot settings from language stats
+*.plt linguist-detectable=false
+*.net linguist-detectable=false
